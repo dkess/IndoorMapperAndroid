@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/activity_main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:paddingBottom="@dimen/activity_vertical_margin"
+    android:paddingLeft="@dimen/activity_horizontal_margin"
+    android:paddingRight="@dimen/activity_horizontal_margin"
+    android:paddingTop="@dimen/activity_vertical_margin"
+    tools:context="me.dkess.indoormapper.MainActivity">
+
+    <ToggleButton
+        android:text="ToggleButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/b_right"
+        android:textOff="Right"
+        android:textOn="Right"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentRight="true"
+        android:layout_alignParentEnd="true"
+        android:layout_marginRight="22dp"
+        android:layout_marginEnd="22dp" />
+
+    <ToggleButton
+        android:text="ToggleButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/b_forward"
+        android:textOff="Forward"
+        android:textOn="Forward"
+        android:layout_alignParentTop="true"
+        android:layout_centerHorizontal="true" />
+
+    <ToggleButton
+        android:text="Left"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/b_left"
+        tools:text="Left"
+        android:textOff="Left"
+        android:textOn="Left"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true"
+        android:layout_marginLeft="15dp"
+        android:layout_marginStart="15dp"
+        android:checked="false" />
+
+    <ToggleButton
+        android:text="ToggleButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/b_left"
+        android:layout_alignLeft="@+id/b_left"
+        android:layout_alignStart="@+id/b_left"
+        android:layout_marginTop="11dp"
+        android:id="@+id/b_forceleft"
+        android:textOff="Off"
+        android:textOn="Force" />
+
+    <ToggleButton
+        android:text="ToggleButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignTop="@+id/b_forceleft"
+        android:layout_alignRight="@+id/b_forward"
+        android:layout_alignEnd="@+id/b_forward"
+        android:id="@+id/b_forceforward"
+        android:textOn="Force" />
+
+    <ToggleButton
+        android:text="ToggleButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignTop="@+id/b_forceforward"
+        android:layout_alignLeft="@+id/b_right"
+        android:layout_alignStart="@+id/b_right"
+        android:id="@+id/b_forceright"
+        android:textOn="Force" />
+
+    <Button
+        android:text="Undo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="22dp"
+        android:id="@+id/b_undo"
+        android:layout_below="@+id/b_forceleft"
+        android:layout_alignLeft="@+id/b_forceleft"
+        android:layout_alignStart="@+id/b_forceleft"
+        android:longClickable="true"
+        android:onClick="onUndoPress" />
+
+    <Button
+        android:text="Go"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/b_go"
+        android:layout_alignBaseline="@+id/b_undo"
+        android:layout_alignBottom="@+id/b_undo"
+        android:layout_alignLeft="@+id/b_forceforward"
+        android:layout_alignStart="@+id/b_forceforward"
+        android:layout_alignRight="@+id/b_forceright"
+        android:layout_alignEnd="@+id/b_forceright"
+        android:onClick="onGoPress" />
+
+    <TextView
+        android:text="TextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/b_undo"
+        android:layout_alignLeft="@+id/b_undo"
+        android:layout_alignStart="@+id/b_undo"
+        android:layout_marginTop="21dp"
+        android:id="@+id/textView"
+        android:layout_alignRight="@+id/b_go"
+        android:layout_alignEnd="@+id/b_go" />
+</RelativeLayout>
