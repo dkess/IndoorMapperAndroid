@@ -432,17 +432,16 @@ public class IndoorMapper {
         }
     }
 
-    /** Returns true if a node was removed, otherwise false */
-    public boolean undo() {
-        boolean retval = false;
+    /** Undoes the last action and returns the node_id, desc of the updated most recent position */
+    public IntString undo() {
 
         int last_node_id = map.log.get(map.log.size() - 1).node_id;
         MapNode last_node = map.nodes.get(last_node_id);
         if (last_node_id == map.nodes.size() - 1) {
             map.nodes.remove(last_node_id);
-            retval = true;
         }
         map.log.remove(map.log.size() - 1);
-        return retval;
+        int new_id = map.log.get(map.log.size() - 1).node_id;
+        return new IntString(new_id, map.nodes.get(new_id).description);
     }
 }

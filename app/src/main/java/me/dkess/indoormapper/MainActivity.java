@@ -162,7 +162,7 @@ public class MainActivity extends AppCompatActivity {
         indoorMapper = new IndoorMapper(map);
         IndoorMapper.ForkResult res = indoorMapper.fork_part1(getSelectedDirs());
         if (res == null) {
-            displayMsg("Go error");
+            displayMsg("Unexpected directions");
         } else if (res.on != null) {
             displayMsg("On node "+res.on_id+": "+res.on);
             interpret_part2(
@@ -204,10 +204,19 @@ public class MainActivity extends AppCompatActivity {
 
     public void onUndoPress(View view) {
         if (isUndoLongPressed) {
-            displayMsg("pressed undo long");
+            File file = new File(getExternalFilesDir(null), "nodes.json");
+            IndoorMapper.IndoorMap map = IndoorMapper.IndoorMap.readFromFile(file);
+            indoorMapper = new IndoorMapper(map);
+            IntString res = indoorMapper.undo();
+
+            displayMsg("Undo. Now at " + res.n + ": "+res.s);
+            boolean writeRes = indoorMapper.map.writeToFile(file);
+            if (!writeRes) {
+                displayMsg("File error! :(");
+            }
             resetButtons();
+
         }
-        displayMsg("pressed undo");
         isUndoLongPressed = false;
     }
 }
