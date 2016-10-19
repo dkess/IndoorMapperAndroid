@@ -1,0 +1,448 @@
+package me.dkess.indoormapper;
+
+import android.util.JsonWriter;
+import android.util.Log;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileWriter;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.charset.Charset;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
+
+public class IndoorMapper {
+    public enum Direction {
+        forward, right, backward, left;
+
+        public Direction add(Direction other) {
+            return Direction.values()[(this.ordinal() + other.ordinal()) % 4];
+        }
+
+        public Direction sub(Direction other) {
+            return Direction.values()[(4 + this.ordinal() - other.ordinal()) % 4];
+        }
+
+        public Direction opposite() {
+            return this.add(Direction.backward);
+        }
+
+        public static Direction fromLetter(char c) {
+            return Direction.values()["wsda".indexOf(c)];
+        }
+    }
+
+    private static DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+
+    private static boolean hasSameElements(Direction[] a, Set<Direction> b) {
+        for (Direction d : Direction.values()) {
+            boolean inArray = false;
+            for (Direction e : a) {
+                if (d == e) {
+                    inArray = true;
+                    break;
+                }
+            }
+
+            if (b.contains(d) != inArray) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static class IndoorMap {
+        public ArrayList<LogEntry> log;
+        public ArrayList<MapNode> nodes;
+
+        public JSONObject toJSON() {
+            ArrayList<JSONObject> logj = new ArrayList<>(this.log.size());
+            for (LogEntry e : this.log) {
+                logj.add(e.toJSON());
+            }
+
+            ArrayList<JSONObject> nodesj = new ArrayList<>(this.nodes.size());
+            for (MapNode n : this.nodes) {
+                nodesj.add(n.toJSON());
+            }
+
+            JSONObject retval = new JSONObject();
+            try {
+                retval.put("nodes", new JSONArray(nodesj));
+                retval.put("log", new JSONArray(logj));
+                return retval;
+            } catch (JSONException e) {}
+            return null;
+        }
+
+        public static IndoorMap readFromFile(File file) {
+            IndoorMapper.IndoorMap map = null;
+            try {
+                FileInputStream stream = new FileInputStream(file);
+                String jsonStr = null;
+                try {
+                    FileChannel fc = stream.getChannel();
+                    MappedByteBuffer bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size());
+                    jsonStr = Charset.defaultCharset().decode(bb).toString();
+                    if (jsonStr.equals("")) {
+                        throw new FileNotFoundException("file was empty");
+                    }
+                    map = IndoorMapper.IndoorMap.fromJSON(new JSONObject(jsonStr));
+                } catch (java.io.IOException e) {
+                } catch (JSONException e) {
+                } finally {
+                    stream.close();
+                }
+            } catch (FileNotFoundException e) {
+                map = IndoorMapper.makeEmptyMap();
+            } catch (java.io.IOException e) {
+                return null;
+            }
+            return map;
+        }
+
+        public boolean writeToFile(File file) {
+            try {
+                FileWriter fileWriter = new FileWriter(file);
+                fileWriter.write(toJSON().toString());
+                fileWriter.flush();
+                fileWriter.close();
+            } catch (java.io.IOException e) {
+                return false;
+            } catch (NullPointerException e) {
+                return false;
+            }
+            return true;
+        }
+
+        public IndoorMap(ArrayList<LogEntry> log, ArrayList<MapNode> nodes) {
+            this.log = log;
+            this.nodes = nodes;
+        }
+
+        public static IndoorMap fromJSON(JSONObject json) {
+            try {
+                JSONArray logArray = json.getJSONArray("log");
+                ArrayList<LogEntry> log = new ArrayList<>(logArray.length());
+                for (int i = 0; i < logArray.length(); i++) {
+                    log.add(LogEntry.fromJSON(logArray.getJSONObject(i)));
+                }
+
+                JSONArray nodesArray = json.getJSONArray("nodes");
+                ArrayList<MapNode> nodes = new ArrayList<>(nodesArray.length());
+                for (int i = 0; i < nodesArray.length(); i++) {
+                    nodes.add(MapNode.fromJSON(nodesArray.getJSONObject(i)));
+                }
+
+                return new IndoorMap(log, nodes);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+    }
+
+    private static class LogEntry {
+        public final Direction afterturn;
+        public final String time_enter;
+        public final int node_id;
+
+        public LogEntry(Direction afterturn, Date time_enter, int node_id) {
+            this.afterturn = afterturn;
+            this.time_enter = dateFormat.format(time_enter);
+            this.node_id = node_id;
+        }
+
+        public LogEntry(Direction afterturn, String time_enter, int node_id) {
+            this.afterturn = afterturn;
+            this.time_enter = time_enter;
+            this.node_id = node_id;
+        }
+
+        public JSONObject toJSON() {
+            JSONObject retval = new JSONObject();
+            try {
+                retval.put("afterturn", afterturn.toString());
+                retval.put("time_enter", time_enter);
+                retval.put("node", node_id);
+                return retval;
+            } catch (JSONException e) {}
+            return null;
+        }
+
+        public static LogEntry fromJSON(JSONObject json) throws JSONException {
+            return new LogEntry(Direction.valueOf(json.getString("afterturn")),
+                    json.getString("time_enter"),
+                    json.getInt("node"));
+        }
+    }
+
+    private static class MapNode {
+        /** -1 means unexplored, 0 or above is a node id */
+        private final EnumMap<Direction, Integer> branches;
+        private final String description;
+
+        public MapNode(EnumSet<Direction> branches, String description) {
+            this.branches = new EnumMap<Direction, Integer>(Direction.class);
+            for (Direction d : branches) {
+                this.branches.put(d, -1);
+            }
+            this.description = description;
+        }
+
+        private MapNode(EnumMap<Direction, Integer> branches, String description) {
+            this.branches = branches;
+            this.description = description;
+        }
+
+        public JSONObject toJSON() {
+            JSONObject retval = new JSONObject();
+            try {
+                JSONObject b = new JSONObject();
+                for (Map.Entry<Direction, Integer> e : branches.entrySet()) {
+                    if (e.getValue() == -1) {
+                        b.put(e.getKey().name(), JSONObject.NULL);
+                    } else {
+                        b.put(e.getKey().name(), e.getValue());
+                    }
+                }
+                retval.put("branches", b);
+                retval.put("description", description);
+                return retval;
+            } catch (JSONException e) {}
+            return null;
+        }
+
+        public static MapNode fromJSON(JSONObject json) throws JSONException {
+            EnumMap<Direction, Integer> branches = new EnumMap<Direction, Integer>(Direction.class);
+            JSONObject branchesObj = json.getJSONObject("branches");
+            Iterator<String> iter = branchesObj.keys();
+            while (iter.hasNext()) {
+                String dn = iter.next();
+                if (branchesObj.isNull(dn)) {
+                    branches.put(Direction.valueOf(dn), -1);
+                } else {
+                    branches.put(Direction.valueOf(dn), branchesObj.getInt(dn));
+                }
+            }
+
+            return new MapNode(branches, json.getString("description"));
+        }
+    }
+
+    public static IndoorMap makeEmptyMap() {
+        ArrayList<LogEntry> log = new ArrayList<>(1);
+        log.add(new LogEntry(Direction.forward, new Date(), 0));
+
+        ArrayList<MapNode> nodes = new ArrayList<>(1);
+        nodes.add(new MapNode(EnumSet.of(Direction.forward), "root node"));
+
+        return new IndoorMap(log, nodes);
+    }
+
+    public static class ForkResult {
+        String on;
+        int on_id;
+        ArrayList<IntString> choices;
+    }
+
+    IndoorMap map;
+    Direction currently_facing;
+    Direction behind;
+    EnumSet<Direction> abs_branches;
+    int last_node_id;
+
+    public IndoorMapper(IndoorMap map) {
+        this.map = map;
+    }
+
+    /**
+     * The possibilities are:
+     * - Something happened that triggered early termination (inconsistent nodes)
+     * - We are already on a known node, and we know we are on it: all values will be filled except
+     *   choices which will be null
+     * - We created a new node which does not need a name: choices will be null, on will be "",
+     *   and on_id will be filled
+     * - We don't know which node we are on: choices will be filled, on will be null, node_id will
+     *   be -1
+     * @param dirs
+     * @return
+     */
+    public ForkResult fork_part1(EnumSet<Direction> dirs) {
+        currently_facing = map.log.get(map.log.size() - 1).afterturn;
+        behind = currently_facing.opposite();
+
+        abs_branches = EnumSet.noneOf(Direction.class);
+        for (Direction d : dirs) {
+            abs_branches.add(d.add(currently_facing));
+        }
+        abs_branches.add(behind);
+
+        last_node_id = map.log.get(map.log.size() - 1).node_id;
+
+        // check if we are definitely at an already existing node
+        int node_id = -1;
+        MapNode node = null;
+        ForkResult forkResult = new ForkResult();
+        int i = 0;
+        for (MapNode mn : map.nodes) {
+            if (mn.branches.containsKey(behind)
+                    && mn.branches.get(behind) == last_node_id) {
+                node = mn;
+                node_id = i;
+            }
+            i++;
+        }
+
+        if (node != null) {
+            // Do an extra check that this node is consistent
+            if (!abs_branches.equals(node.branches.keySet())) {
+                return null;
+            }
+
+            forkResult.on = node.description;
+            forkResult.on_id = node_id;
+        } else if (dirs.size() <= 1) {
+            // create a new node
+            node_id = map.nodes.size();
+
+            node = new MapNode(abs_branches, "");
+            node.branches.put(behind, last_node_id);
+            map.nodes.add(node);
+
+            forkResult.on = "";
+            forkResult.on_id = node_id;
+        } else {
+            forkResult.choices = new ArrayList<>();
+            // Generate the list of possible existing nodes we could be on
+            int j = 0;
+            for (MapNode mn : map.nodes) {
+                if (abs_branches.equals(mn.branches.keySet())
+                        && mn.branches.containsKey(behind)
+                        && mn.branches.get(behind) == -1) {
+                    forkResult.choices.add(new IntString(j, mn.description));
+                }
+                j++;
+            }
+        }
+
+        return forkResult;
+    }
+
+    public Direction fork_part2(int choice, String newDesc, Direction forceTurn) {
+        MapNode node;
+        int node_id;
+        if (newDesc != null) {
+            // create a new node
+            node_id = map.nodes.size();
+            node = new MapNode(abs_branches, newDesc);
+            node.branches.put(behind, last_node_id);
+            map.nodes.add(node);
+        } else {
+            node = map.nodes.get(choice);
+            node_id = choice;
+        }
+
+        map.nodes.get(last_node_id).branches.put(currently_facing, node_id);
+
+        // Now the node and id are saved in the node and node_id vars
+        // We now need to decide which direction the user should be directed in
+        // We accomplish this by doing BFS until an unexplored node is found
+        HashMap<Integer, Integer> distance = new HashMap<>();
+        HashMap<Integer, Integer> parent = new HashMap<>();
+        HashMap<Integer, Direction> parentDir = new HashMap<>();
+
+        Queue<Integer> frontier = new ArrayDeque<>();
+        distance.put(node_id, 0);
+        parent.put(node_id, -1);
+
+        frontier.add(node_id);
+        boolean found_unexplored = false;
+
+        while (!frontier.isEmpty()) {
+            int current = frontier.remove();
+            MapNode current_node = map.nodes.get(current);
+            int[] branches = new int[current_node.branches.size()];
+            int i = 0;
+            for (Direction d : current_node.branches.keySet()) {
+                branches[i] = (d.sub(currently_facing).add(Direction.right)).ordinal();
+                i++;
+            }
+            Arrays.sort(branches);
+
+            for (i = branches.length - 1; i >= 0; i--) {
+                Direction d = Direction.values()[branches[i]].sub(Direction.right).add(currently_facing);
+            }
+            for (i = branches.length - 1; i >= 0; i--) {
+                Direction d = Direction.values()[branches[i]].sub(Direction.right).add(currently_facing);
+                int next_id = current_node.branches.get(d);
+                if (next_id == -1 || !distance.containsKey(next_id)) {
+                    distance.put(next_id, distance.get(current) + 1);
+                    parent.put(next_id, current);
+                    parentDir.put(next_id, d);
+
+                    if (next_id == -1) {
+                        found_unexplored = true;
+                        if (current == node_id && d.sub(currently_facing) == forceTurn) {
+                            break;
+                        }
+                    }
+                    frontier.add(next_id);
+                }
+            }
+
+            if (found_unexplored) {
+                break;
+            }
+        }
+
+        if (!found_unexplored) {
+            // TODO: instructions to go back to root
+            map.log.add(new LogEntry(Direction.forward, new Date(), node_id));
+            return null;
+        } else {
+            int current = -1;
+            Direction d = null;
+            while (current != node_id) {
+                d = parentDir.get(current);
+                current = parent.get(current);
+            }
+            map.log.add(new LogEntry(d, new Date(), node_id));
+            return d.sub(currently_facing);
+        }
+    }
+
+    /** Returns true if a node was removed, otherwise false */
+    public boolean undo() {
+        boolean retval = false;
+
+        int last_node_id = map.log.get(map.log.size() - 1).node_id;
+        MapNode last_node = map.nodes.get(last_node_id);
+        if (last_node_id == map.nodes.size() - 1) {
+            map.nodes.remove(last_node_id);
+            retval = true;
+        }
+        map.log.remove(map.log.size() - 1);
+        return retval;
+    }
+}
