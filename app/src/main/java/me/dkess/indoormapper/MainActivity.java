@@ -1,38 +1,41 @@
 package me.dkess.indoormapper;
 
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
-import android.graphics.Rect;
-import android.support.v7.app.AppCompatActivity;
+import android.content.IntentFilter;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+import android.support.v4.content.LocalBroadcastManager;
+import android.support.v7.app.AppCompatActivity;
 import android.text.method.ScrollingMovementMethod;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
-import android.widget.CompoundButton;
 import android.widget.TextView;
 import android.widget.ToggleButton;
 
-import org.json.JSONException;
-import org.json.JSONObject;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.ResultCallback;
+import com.google.android.gms.common.api.Status;
+import com.google.android.gms.location.ActivityRecognition;
+import com.google.android.gms.location.DetectedActivity;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.Serializable;
-import java.lang.reflect.Array;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.charset.Charset;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.EnumSet;
-import java.util.Iterator;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity
+        implements GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener,
+        ResultCallback<Status> {
     private static final IndoorMapper.Direction[] dir_const = {
             IndoorMapper.Direction.left,
             IndoorMapper.Direction.forward,
@@ -45,6 +48,9 @@ public class MainActivity extends AppCompatActivity {
     private boolean isUndoLongPressed = false;
     IndoorMapper indoorMapper = null;
 
+    protected GoogleApiClient mGoogleApiClient;
+    private ActivityDetectionBroadcastReceiver mBroadcastReceiver;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -52,51 +58,74 @@ public class MainActivity extends AppCompatActivity {
 
         ((TextView) findViewById(R.id.textView)).setMovementMethod(new ScrollingMovementMethod());
 
+        mBroadcastReceiver = new ActivityDetectionBroadcastReceiver();
+
         displayMsg("App started");
 
         Button undoButton = (Button) findViewById(R.id.b_undo);
         undoButton.setOnLongClickListener(undoLongClickListener);
         undoButton.setOnTouchListener(undoTouchListener);
 
-        /*
-        for (int i = 0; i < turnButtonIds.length; i++) {
-            final int j = i;
-            ToggleButton tb = (ToggleButton) findViewById(turnButtonIds[i]);
-            tb.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-                @Override
-                public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                    if (isChecked) {
-                        selectedDirs.add(dir_const[j]);
-                    } else {
-                        selectedDirs.remove(dir_const[j]);
-                    }
-                }
-            });
-        }
+        mGoogleApiClient = new GoogleApiClient.Builder(this)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .addApi(ActivityRecognition.API)
+                .build();
 
-
-        for (int i : forceButtonIds) {
-            ToggleButton tb = (ToggleButton) findViewById(i);
-            final int ii = i;
-            tb.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-                @Override
-                public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                    if (isChecked) {
-                        for (int j = 0; j < 3; j++) {
-                            if (forceButtonIds[j] != ii) {
-                                ((ToggleButton) findViewById(forceButtonIds[j])).setChecked(false);
-                            } else {
-                                forceTurnSelect = dir_const[j];
-                            }
-                        }
-                    } else {
-                        forceTurnSelect = null;
-                    }
-                }
-            });
-        }
-        */
     }
+
+    private PendingIntent getActivityDetectionPendingIntent() {
+        Intent intent = new Intent(this, DetectedActivitiesIntentService.class);
+
+        // We use FLAG_UPDATE_CURRENT so that we get the same pending intent back when calling
+        // requestActivityUpdate`s() and removeActivityUpdates().
+        return PendingIntent.getService(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        mGoogleApiClient.connect();
+        LocalBroadcastManager.getInstance(this).registerReceiver(mBroadcastReceiver,
+                new IntentFilter(Constants.BROADCAST_ACTION));
+
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        mGoogleApiClient.disconnect();
+    }
+    @Override
+    protected void onResume() {
+        super.onResume();
+        LocalBroadcastManager.getInstance(this).registerReceiver(mBroadcastReceiver,
+                new IntentFilter(Constants.BROADCAST_ACTION));
+    }
+
+    @Override
+    protected void onPause() {
+        // Unregister the broadcast receiver that was registered during onResume().
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(mBroadcastReceiver);
+        super.onPause();
+    }
+
+    /**
+     * Runs when the result of calling requestActivityUpdates() and removeActivityUpdates() becomes
+     * available. Either method can complete successfully or with an error.
+     *
+     * @param status The Status returned through a PendingIntent when requestActivityUpdates()
+     *               or removeActivityUpdates() are called.
+     */
+    public void onResult(Status status) {
+        TextView statusIndicator = (TextView) findViewById(R.id.indicator);
+        if (status.isSuccess()) {
+            statusIndicator.setText("it's working");
+        } else {
+            statusIndicator.setText("Error: " + status.getStatusMessage());
+        }
+    }
+
 
     private View.OnLongClickListener undoLongClickListener = new View.OnLongClickListener(){
         public boolean onLongClick(View v) {
@@ -218,5 +247,63 @@ public class MainActivity extends AppCompatActivity {
 
         }
         isUndoLongPressed = false;
+    }
+
+    @Override
+    public void onConnected(@Nullable Bundle bundle) {
+        displayMsg("connected to gp");
+        ActivityRecognition.ActivityRecognitionApi.requestActivityUpdates(
+                mGoogleApiClient,
+                0,
+                getActivityDetectionPendingIntent()
+        ).setResultCallback(this);
+    }
+
+    @Override
+    public void onConnectionSuspended(int i) {
+        displayMsg("gp connection suspended");
+    }
+
+    @Override
+    public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
+        displayMsg("gp connection failed");
+    }
+
+    public class ActivityDetectionBroadcastReceiver extends BroadcastReceiver {
+        protected static final String TAG = "activity-detection-response-receiver";
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            /*
+            ArrayList<DetectedActivity> updatedActivities =
+                    intent.getParcelableArrayListExtra(Constants.ACTIVITY_EXTRA);
+            System.out.println("got something");
+            System.out.println(updatedActivities);
+            int highestType = -1;
+            int highestConfidence = 0;
+            for (DetectedActivity da : updatedActivities) {
+                if (da.getConfidence())
+            }
+            */
+            DetectedActivity da = intent.getParcelableExtra(Constants.BROADCAST_ACTION);
+            long detectTime = intent.getLongExtra(Constants.DETECT_TIME, 0);
+            boolean notMoving = da.getType() == DetectedActivity.STILL;
+
+            TextView tv = (TextView) findViewById(R.id.walking_indicator);
+            if (notMoving) {
+                tv.setText("Not moving");
+            } else {
+                tv.setText("Moving");
+            }
+
+            File file = new File(getExternalFilesDir(null), "walking_log.txt");
+            try {
+                FileWriter fileWriter = new FileWriter(file, true);
+                String status = notMoving ? "n " : "y ";
+                fileWriter.write(status + detectTime);
+                fileWriter.flush();
+                fileWriter.close();
+            } catch (IOException e) {}
+        }
     }
 }

@@ -114,6 +114,24 @@
         android:layout_alignRight="@+id/b_go"
         android:layout_alignEnd="@+id/b_go"
         android:layout_below="@+id/b_undo"
-        android:maxLines="3" />
+        android:maxLines="15" />
+
+    <TextView
+        android:text="TextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/indicator"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true" />
+
+    <TextView
+        android:text="TextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_above="@+id/indicator"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true"
+        android:id="@+id/walking_indicator" />
 
 </RelativeLayout>
