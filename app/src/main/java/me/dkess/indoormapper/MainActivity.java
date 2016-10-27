@@ -20,6 +20,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Array;
 import java.nio.MappedByteBuffer;
@@ -41,7 +43,6 @@ public class MainActivity extends AppCompatActivity {
     private static final int[] turnButtonIds = {R.id.b_left, R.id.b_forward, R.id.b_right};
     private static final int[] forceButtonIds = {R.id.b_forceleft, R.id.b_forceforward, R.id.b_forceright};
 
-
     private boolean isUndoLongPressed = false;
     IndoorMapper indoorMapper = null;
 
@@ -57,6 +58,13 @@ public class MainActivity extends AppCompatActivity {
         Button undoButton = (Button) findViewById(R.id.b_undo);
         undoButton.setOnLongClickListener(undoLongClickListener);
         undoButton.setOnTouchListener(undoTouchListener);
+
+        ((ToggleButton) findViewById(R.id.walking_toggle)).setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                walkingTogglePressed(isChecked);
+            }
+        });
 
         /*
         for (int i = 0; i < turnButtonIds.length; i++) {
@@ -218,5 +226,15 @@ public class MainActivity extends AppCompatActivity {
 
         }
         isUndoLongPressed = false;
+    }
+
+    private void walkingTogglePressed(boolean isWalking) {
+        File file = new File(getExternalFilesDir(null), "walking_log.txt");
+        try {
+            FileWriter fileWriter = new FileWriter(file, true);
+            String status = isWalking ? "y " : "n ";
+            fileWriter.write(status + System.currentTimeMillis() + "\n");
+            fileWriter.close();
+        } catch (IOException e) {}
     }
 }

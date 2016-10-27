@@ -114,6 +114,18 @@
         android:layout_alignRight="@+id/b_go"
         android:layout_alignEnd="@+id/b_go"
         android:layout_below="@+id/b_undo"
-        android:maxLines="3" />
+        android:maxLines="11" />
+
+    <ToggleButton
+        android:text="ToggleButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="78dp"
+        android:id="@+id/walking_toggle"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentRight="true"
+        android:layout_alignParentEnd="true" />
 
 </RelativeLayout>
