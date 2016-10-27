@@ -1,9 +1,8 @@
 package me.dkess.indoormapper;
 
 import android.content.Intent;
-import android.graphics.Rect;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
 import android.text.method.ScrollingMovementMethod;
 import android.view.MotionEvent;
 import android.view.View;
@@ -12,27 +11,13 @@ import android.widget.CompoundButton;
 import android.widget.TextView;
 import android.widget.ToggleButton;
 
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.Serializable;
-import java.lang.reflect.Array;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.charset.Charset;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.EnumSet;
-import java.util.Iterator;
 
 public class MainActivity extends AppCompatActivity {
     private static final IndoorMapper.Direction[] dir_const = {
@@ -65,45 +50,6 @@ public class MainActivity extends AppCompatActivity {
                 walkingTogglePressed(isChecked);
             }
         });
-
-        /*
-        for (int i = 0; i < turnButtonIds.length; i++) {
-            final int j = i;
-            ToggleButton tb = (ToggleButton) findViewById(turnButtonIds[i]);
-            tb.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-                @Override
-                public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                    if (isChecked) {
-                        selectedDirs.add(dir_const[j]);
-                    } else {
-                        selectedDirs.remove(dir_const[j]);
-                    }
-                }
-            });
-        }
-
-
-        for (int i : forceButtonIds) {
-            ToggleButton tb = (ToggleButton) findViewById(i);
-            final int ii = i;
-            tb.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-                @Override
-                public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                    if (isChecked) {
-                        for (int j = 0; j < 3; j++) {
-                            if (forceButtonIds[j] != ii) {
-                                ((ToggleButton) findViewById(forceButtonIds[j])).setChecked(false);
-                            } else {
-                                forceTurnSelect = dir_const[j];
-                            }
-                        }
-                    } else {
-                        forceTurnSelect = null;
-                    }
-                }
-            });
-        }
-        */
     }
 
     private View.OnLongClickListener undoLongClickListener = new View.OnLongClickListener(){
