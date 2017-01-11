@@ -1,7 +1,14 @@
 package me.dkess.indoormapper;
 
+import android.content.ContentValues;
 import android.content.Intent;
+import android.database.sqlite.SQLiteDatabase;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.support.v7.app.AppCompatActivity;
 import android.text.method.ScrollingMovementMethod;
 import android.view.MotionEvent;
@@ -12,18 +19,23 @@ import android.widget.TextView;
 import android.widget.ToggleButton;
 
 import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.EnumSet;
 
-public class MainActivity extends AppCompatActivity {
-    private static final IndoorMapper.Direction[] dir_const = {
-            IndoorMapper.Direction.left,
-            IndoorMapper.Direction.forward,
-            IndoorMapper.Direction.right};
+public class MainActivity extends AppCompatActivity implements SensorEventListener {
+    private SensorManager mSensorManager;
+    private Sensor mAccelerometer;
+    private Sensor mGyro;
+    private Sensor mCompass;
+
+    private boolean isRecording = false;
+
+    private static final Direction[] dir_const = {
+            Direction.left,
+            Direction.forward,
+            Direction.right};
 
     private static final int[] turnButtonIds = {R.id.b_left, R.id.b_forward, R.id.b_right};
     private static final int[] forceButtonIds = {R.id.b_forceleft, R.id.b_forceforward, R.id.b_forceright};
@@ -31,9 +43,13 @@ public class MainActivity extends AppCompatActivity {
     private boolean isUndoLongPressed = false;
     IndoorMapper indoorMapper = null;
 
+    AccelerometerDBHelper accelerometerDBHelper;
+    SQLiteDatabase db;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.activity_main);
 
         ((TextView) findViewById(R.id.textView)).setMovementMethod(new ScrollingMovementMethod());
@@ -47,9 +63,31 @@ public class MainActivity extends AppCompatActivity {
         ((ToggleButton) findViewById(R.id.walking_toggle)).setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                walkingTogglePressed(isChecked);
+                recordingTogglePressed(isChecked);
             }
         });
+
+        mSensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+        mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        mGyro = mSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+        mCompass = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+
+        accelerometerDBHelper = new AccelerometerDBHelper(getApplicationContext());
+        db = accelerometerDBHelper.getWritableDatabase();
+    }
+
+    protected void onResume() {
+        super.onResume();
+
+        if (isRecording) {
+            startRecording();
+        }
+    }
+
+    protected void onPause() {
+        super.onPause();
+
+        stopRecording();
     }
 
     private View.OnLongClickListener undoLongClickListener = new View.OnLongClickListener(){
@@ -80,8 +118,8 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private EnumSet<IndoorMapper.Direction> getSelectedDirs() {
-        EnumSet<IndoorMapper.Direction> dirs = EnumSet.noneOf(IndoorMapper.Direction.class);
+    private EnumSet<Direction> getSelectedDirs() {
+        EnumSet<Direction> dirs = EnumSet.noneOf(Direction.class);
         for (int i = 0; i < 3; i++) {
             ToggleButton tb = (ToggleButton) findViewById(turnButtonIds[i]);
             if (tb.isChecked()) {
@@ -91,7 +129,7 @@ public class MainActivity extends AppCompatActivity {
         return dirs;
     }
 
-    private IndoorMapper.Direction getSelectedForceTurn() {
+    private Direction getSelectedForceTurn() {
         for (int i = 0; i < 3; i++) {
             ToggleButton tb = (ToggleButton) findViewById(forceButtonIds[i]);
             if (tb.isChecked()) {
@@ -118,7 +156,6 @@ public class MainActivity extends AppCompatActivity {
         if (res == null) {
             displayMsg("Unexpected directions");
         } else if (res.on != null) {
-            displayMsg("On node "+res.on_id+": "+res.on);
             interpret_part2(
                     indoorMapper.fork_part2(res.on_id, null, getSelectedForceTurn()));
         } else {
@@ -146,13 +183,16 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void interpret_part2(IndoorMapper.Direction nextDir) {
+    private void interpret_part2(Direction nextDir) {
+        IntString res = indoorMapper.currentNode();
+        displayMsg("On node "+res.n+": "+res.s);
         displayMsg("You should turn "+nextDir);
         File file = new File(getExternalFilesDir(null), "nodes.json");
         boolean writeRes = indoorMapper.map.writeToFile(file);
         if (!writeRes) {
             displayMsg("File error! :(");
         }
+        updateExpectedDir();
         resetButtons();
     }
 
@@ -161,26 +201,112 @@ public class MainActivity extends AppCompatActivity {
             File file = new File(getExternalFilesDir(null), "nodes.json");
             IndoorMapper.IndoorMap map = IndoorMapper.IndoorMap.readFromFile(file);
             indoorMapper = new IndoorMapper(map);
-            IntString res = indoorMapper.undo();
+            indoorMapper.undo();
+
+            IntString res = indoorMapper.currentNode();
 
             displayMsg("Undo. Now at " + res.n + ": "+res.s);
             boolean writeRes = indoorMapper.map.writeToFile(file);
             if (!writeRes) {
                 displayMsg("File error! :(");
             }
+            updateExpectedDir();
             resetButtons();
 
         }
         isUndoLongPressed = false;
     }
 
-    private void walkingTogglePressed(boolean isWalking) {
-        File file = new File(getExternalFilesDir(null), "walking_log.txt");
-        try {
-            FileWriter fileWriter = new FileWriter(file, true);
-            String status = isWalking ? "y " : "n ";
-            fileWriter.write(status + System.currentTimeMillis() + "\n");
-            fileWriter.close();
-        } catch (IOException e) {}
+    private void recordingTogglePressed(boolean isPressed) {
+        isRecording = isPressed;
+
+        if (isRecording) {
+            startRecording();
+        } else {
+            stopRecording();
+        }
+    }
+
+    private void startRecording() {
+        mSensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        mSensorManager.registerListener(this, mGyro, SensorManager.SENSOR_DELAY_NORMAL);
+        mSensorManager.registerListener(this, mCompass, SensorManager.SENSOR_DELAY_NORMAL);
+    }
+
+    private void stopRecording() {
+        mSensorManager.unregisterListener(this);
+    }
+
+    private void updateExpectedDir() {
+        String msg = "Facing: " + getCompassDir().toString();
+        if (indoorMapper != null) {
+            msg += " Exp: " + indoorMapper.absolute_dir();
+        }
+        ((TextView) findViewById(R.id.current_orientation)).setText(msg);
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+
+    }
+
+    float[] mGravity;
+    float[] mGeomagnetic;
+    float azimut;
+    float north;
+
+    public void calibrateForward(View view) {
+        north = azimut;
+    }
+
+    float TWOPI = 2 * (float) Math.PI;
+
+    /**
+     * Returns the direction the user is facing, relative to whichever direction they were facing
+     * when calibrateForward() was called.
+     */
+    private Direction getCompassDir() {
+        int shifted = (int) ((azimut - north + TWOPI + (float) Math.PI / 4) / (Math.PI / 2)) % 4;
+        return Direction.values()[shifted];
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            mGravity = event.values;
+        } else if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
+            mGeomagnetic = event.values;
+        }
+
+        if ((event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD
+                || event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
+                && mGravity != null && mGeomagnetic != null) {
+            float Ro[] = new float[9];
+            float I[] = new float[9];
+            boolean success = SensorManager.getRotationMatrix(Ro, I, mGravity, mGeomagnetic);
+            if (success) {
+                float orientation[] = new float[3];
+                SensorManager.getOrientation(Ro, orientation);
+                azimut = (orientation[0] + 3 * (float) Math.PI) % TWOPI;
+                updateExpectedDir();
+            }
+        }
+
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER
+                || event.sensor.getType() == Sensor.TYPE_GYROSCOPE) {
+            // convert sensor timestamp to unix time
+            // http://stackoverflow.com/a/9333605
+            // Note: sensor timestamps have weird bugs, and aren't working on my phone
+            // so I'm just using currentTimeMillis.
+            long timeInMillis = System.currentTimeMillis();
+            ContentValues values = new ContentValues();
+            values.put("sensor", event.sensor.getType());
+            values.put("timestamp", timeInMillis);
+            values.put("x", event.values[0]);
+            values.put("y", event.values[1]);
+            values.put("z", event.values[2]);
+
+            db.insert(AccelerometerDBHelper.TABLE_NAME, null, values);
+        }
     }
 }

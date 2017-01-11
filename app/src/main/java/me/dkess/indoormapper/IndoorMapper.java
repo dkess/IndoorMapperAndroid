@@ -32,26 +32,6 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 
 public class IndoorMapper {
-    public enum Direction {
-        forward, right, backward, left;
-
-        public Direction add(Direction other) {
-            return Direction.values()[(this.ordinal() + other.ordinal()) % 4];
-        }
-
-        public Direction sub(Direction other) {
-            return Direction.values()[(4 + this.ordinal() - other.ordinal()) % 4];
-        }
-
-        public Direction opposite() {
-            return this.add(Direction.backward);
-        }
-
-        public static Direction fromLetter(char c) {
-            return Direction.values()["wsda".indexOf(c)];
-        }
-    }
-
     private static DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
 
     private static boolean hasSameElements(Direction[] a, Set<Direction> b) {
@@ -349,6 +329,9 @@ public class IndoorMapper {
         return forkResult;
     }
 
+    /**
+     * Returns the direction the user should turn in, or null if we are done.
+     */
     public Direction fork_part2(int choice, String newDesc, Direction forceTurn) {
         MapNode node;
         int node_id;
@@ -432,8 +415,20 @@ public class IndoorMapper {
         }
     }
 
+    /**
+     * Returns the absolute direction the user was last instructed to turn in
+     */
+    public Direction absolute_dir() {
+        return map.log.get(map.log.size() - 1).afterturn;
+    }
+
+    public IntString currentNode() {
+        int new_id = map.log.get(map.log.size() - 1).node_id;
+        return new IntString(new_id, map.nodes.get(new_id).description);
+    }
+
     /** Undoes the last action and returns the node_id, desc of the updated most recent position */
-    public IntString undo() {
+    public void undo() {
 
         int last_node_id = map.log.get(map.log.size() - 1).node_id;
         MapNode last_node = map.nodes.get(last_node_id);
@@ -441,7 +436,5 @@ public class IndoorMapper {
             map.nodes.remove(last_node_id);
         }
         map.log.remove(map.log.size() - 1);
-        int new_id = map.log.get(map.log.size() - 1).node_id;
-        return new IntString(new_id, map.nodes.get(new_id).description);
     }
 }
