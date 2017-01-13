@@ -3,6 +3,7 @@ package me.dkess.indoormapper;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteStatement;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -27,7 +28,6 @@ import java.util.EnumSet;
 public class MainActivity extends AppCompatActivity implements SensorEventListener {
     private SensorManager mSensorManager;
     private Sensor mAccelerometer;
-    private Sensor mGyro;
     private Sensor mCompass;
 
     private boolean isRecording = false;
@@ -69,11 +69,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         mSensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
         mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        mGyro = mSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
         mCompass = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
 
         accelerometerDBHelper = new AccelerometerDBHelper(getApplicationContext());
         db = accelerometerDBHelper.getWritableDatabase();
+        statement = db.compileStatement(SQL_STMT);
     }
 
     protected void onResume() {
@@ -86,6 +86,18 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     protected void onPause() {
         super.onPause();
+
+        stopRecording();
+    }
+
+    protected void onStop() {
+        super.onStop();
+
+        stopRecording();
+    }
+
+    protected void onDestroy() {
+        super.onDestroy();
 
         stopRecording();
     }
@@ -161,12 +173,19 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         } else {
             Intent intent = new Intent(this, ChooseNode.class);
             intent.putExtra("me.dkess.indoormapper.DATA", res.choices);
+
+            // we definitely wont be walking while typing, so stop recording movement on this screen
+            ((ToggleButton) findViewById(R.id.walking_toggle)).setChecked(false);
+
             startActivityForResult(intent, 0);
         }
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        // start recording again
+        ((ToggleButton) findViewById(R.id.walking_toggle)).setChecked(true);
+
         if (requestCode == 0) {
             if (resultCode == RESULT_OK) {
                 Bundle res = data.getExtras();
@@ -229,12 +248,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     private void startRecording() {
         mSensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
-        mSensorManager.registerListener(this, mGyro, SensorManager.SENSOR_DELAY_NORMAL);
         mSensorManager.registerListener(this, mCompass, SensorManager.SENSOR_DELAY_NORMAL);
     }
 
     private void stopRecording() {
         mSensorManager.unregisterListener(this);
+        flushAccelEntries();
     }
 
     private void updateExpectedDir() {
@@ -292,21 +311,46 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             }
         }
 
-        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER
-                || event.sensor.getType() == Sensor.TYPE_GYROSCOPE) {
-            // convert sensor timestamp to unix time
-            // http://stackoverflow.com/a/9333605
-            // Note: sensor timestamps have weird bugs, and aren't working on my phone
-            // so I'm just using currentTimeMillis.
-            long timeInMillis = System.currentTimeMillis();
-            ContentValues values = new ContentValues();
-            values.put("sensor", event.sensor.getType());
-            values.put("timestamp", timeInMillis);
-            values.put("x", event.values[0]);
-            values.put("y", event.values[1]);
-            values.put("z", event.values[2]);
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            // This measurement tends to be ~150ms off from the better measurement, used below
+            //long timeInMillis = System.currentTimeMillis();
 
-            db.insert(AccelerometerDBHelper.TABLE_NAME, null, values);
+            // convert sensor timestamp to unix time
+            // https://code.google.com/p/android/issues/detail?id=7981#c17
+            long timeInMillis = System.currentTimeMillis() + ((event.timestamp-SystemClock.elapsedRealtimeNanos())/1000000L);
+
+            addAccelEntry(timeInMillis, event.values[2]);
+        }
+    }
+
+    // items for accumulating accelerometer data and flushing to db
+    private static final int MAX_ACCEL_ENTRIES = 2048;
+    private float[] accelEntries = new float[MAX_ACCEL_ENTRIES];
+    private int numAccelEntries = 0;
+
+    private final String SQL_STMT =
+            "insert into " + AccelerometerDBHelper.TABLE_NAME + " values (?,?)";
+    private SQLiteStatement statement;
+
+    private void addAccelEntry(long timestamp, double e) {
+        if (numAccelEntries >= MAX_ACCEL_ENTRIES) {
+            flushAccelEntries();
+        }
+        if (numAccelEntries == 0) {
+            db.beginTransaction();
+        }
+        statement.clearBindings();
+        statement.bindLong(1, timestamp);
+        statement.bindDouble(2, e);
+        statement.execute();
+        numAccelEntries++;
+    }
+
+    private void flushAccelEntries() {
+        if (numAccelEntries > 0) {
+            db.setTransactionSuccessful();
+            db.endTransaction();
+            numAccelEntries = 0;
         }
     }
 }

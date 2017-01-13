@@ -9,14 +9,14 @@ import android.database.sqlite.SQLiteOpenHelper;
  */
 
 public class AccelerometerDBHelper extends SQLiteOpenHelper {
-    public static final String TABLE_NAME = "accel_data";
+    public static final String TABLE_NAME = "accel_z";
     private static final String TABLE_CREATE =
             "create table if not exists "
                     + TABLE_NAME
-                    + " (sensor integer, timestamp integer, x real, y real, z real)";
+                    + " (timestamp integer, z real)";
 
     AccelerometerDBHelper(Context context) {
-        super(context, "indoormapper", null, 2);
+        super(context, "indoormapper", null, 3);
     }
 
     @Override
@@ -26,6 +26,9 @@ public class AccelerometerDBHelper extends SQLiteOpenHelper {
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        if (oldVersion == 2 && newVersion == 3) {
+            db.execSQL(TABLE_CREATE);
+        }
 
     }
 }
