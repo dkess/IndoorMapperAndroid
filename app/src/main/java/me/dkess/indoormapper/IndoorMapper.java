@@ -1,8 +1,5 @@
 package me.dkess.indoormapper;
 
-import android.util.JsonWriter;
-import android.util.Log;
-
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -14,26 +11,18 @@ import java.io.FileWriter;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
-import java.util.SortedMap;
-import java.util.TreeMap;
 
 public class IndoorMapper {
-    private static DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-
     private static boolean hasSameElements(Direction[] a, Set<Direction> b) {
         for (Direction d : Direction.values()) {
             boolean inArray = false;
@@ -144,16 +133,10 @@ public class IndoorMapper {
 
     private static class LogEntry {
         public final Direction afterturn;
-        public final String time_enter;
+        public final long time_enter;
         public final int node_id;
 
-        public LogEntry(Direction afterturn, Date time_enter, int node_id) {
-            this.afterturn = afterturn;
-            this.time_enter = dateFormat.format(time_enter);
-            this.node_id = node_id;
-        }
-
-        public LogEntry(Direction afterturn, String time_enter, int node_id) {
+        public LogEntry(Direction afterturn, long time_enter, int node_id) {
             this.afterturn = afterturn;
             this.time_enter = time_enter;
             this.node_id = node_id;
@@ -172,7 +155,7 @@ public class IndoorMapper {
 
         public static LogEntry fromJSON(JSONObject json) throws JSONException {
             return new LogEntry(Direction.valueOf(json.getString("afterturn")),
-                    json.getString("time_enter"),
+                    json.getLong("time_enter"),
                     json.getInt("node"));
         }
     }
@@ -232,7 +215,7 @@ public class IndoorMapper {
 
     public static IndoorMap makeEmptyMap() {
         ArrayList<LogEntry> log = new ArrayList<>(1);
-        log.add(new LogEntry(Direction.forward, new Date(), 0));
+        log.add(new LogEntry(Direction.forward, System.currentTimeMillis(), 0));
 
         ArrayList<MapNode> nodes = new ArrayList<>(1);
         nodes.add(new MapNode(EnumSet.of(Direction.forward), "root node"));
@@ -401,7 +384,7 @@ public class IndoorMapper {
 
         if (!found_unexplored) {
             // TODO: instructions to go back to root
-            map.log.add(new LogEntry(Direction.forward, new Date(), node_id));
+            map.log.add(new LogEntry(Direction.forward, System.currentTimeMillis(), node_id));
             return null;
         } else {
             int current = -1;
@@ -410,7 +393,7 @@ public class IndoorMapper {
                 d = parentDir.get(current);
                 current = parent.get(current);
             }
-            map.log.add(new LogEntry(d, new Date(), node_id));
+            map.log.add(new LogEntry(d, System.currentTimeMillis(), node_id));
             return d.sub(currently_facing);
         }
     }

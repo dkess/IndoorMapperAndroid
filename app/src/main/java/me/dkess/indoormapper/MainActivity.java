@@ -1,7 +1,5 @@
 package me.dkess.indoormapper;
 
-import android.content.BroadcastReceiver;
-import android.content.ContentValues;
 import android.content.Intent;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteStatement;
