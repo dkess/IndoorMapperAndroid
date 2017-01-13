@@ -427,6 +427,30 @@ public class IndoorMapper {
         return new IntString(new_id, map.nodes.get(new_id).description);
     }
 
+    /**
+     * Returns the next set of directions the user should see, if they follow the last instruction.
+     * Returns null if we don't know where the user will be.
+     * The returned set will never contain Directoin.backward.
+     */
+    public Set<Direction> whatWeSee() {
+        Direction abs_dir = absolute_dir();
+
+        int current_id = map.log.get(map.log.size() - 1).node_id;
+        Integer next_id = map.nodes.get(current_id).branches.get(abs_dir);
+        if (next_id == null || next_id < 0) {
+            return null;
+        }
+
+        EnumSet<Direction> output = EnumSet.noneOf(Direction.class);
+        for (Direction d : map.nodes.get(next_id).branches.keySet()) {
+            Direction relative = d.sub(abs_dir);
+            if (relative != Direction.backward) {
+                output.add(relative);
+            }
+        }
+        return output;
+    }
+
     /** Undoes the last action and returns the node_id, desc of the updated most recent position */
     public void undo() {
 

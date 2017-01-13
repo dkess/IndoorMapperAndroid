@@ -1,9 +1,11 @@
 package me.dkess.indoormapper;
 
+import android.content.BroadcastReceiver;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteStatement;
+import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -24,6 +26,7 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.EnumSet;
+import java.util.Set;
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener {
     private SensorManager mSensorManager;
@@ -213,6 +216,17 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
         updateExpectedDir();
         resetButtons();
+
+        // Automatically fill in directions, if we already know what node we're on
+        Set<Direction> directionsWeSee = indoorMapper.whatWeSee();
+        if (directionsWeSee != null) {
+            for (Direction d : directionsWeSee) {
+                // Convert the direction to an index for the turnButtonIds array
+                int turnButtonIndex = (d.ordinal() + 1) % 4;
+                ((ToggleButton) findViewById(turnButtonIds[turnButtonIndex % 4])).setChecked(true);
+            }
+        }
+
     }
 
     public void onUndoPress(View view) {
@@ -257,11 +271,22 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
 
     private void updateExpectedDir() {
-        String msg = "Facing: " + getCompassDir().toString();
+        Direction facing = getCompassDir();
+        Direction expected = null;
+
+        String msg = "Facing: " + facing;
         if (indoorMapper != null) {
-            msg += " Exp: " + indoorMapper.absolute_dir();
+            expected = indoorMapper.absolute_dir();
+            msg += " Exp: " + expected;
         }
-        ((TextView) findViewById(R.id.current_orientation)).setText(msg);
+        TextView tv = ((TextView) findViewById(R.id.current_orientation));
+        tv.setText(msg);
+
+        if (facing != null && expected != null && facing != expected) {
+            tv.setTextColor(Color.rgb(204,42,42));
+        } else {
+            tv.setTextColor(Color.rgb(22,107,19));
+        }
     }
 
     @Override
