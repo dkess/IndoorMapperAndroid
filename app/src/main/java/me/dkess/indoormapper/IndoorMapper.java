@@ -134,11 +134,13 @@ public class IndoorMapper {
     private static class LogEntry {
         public final Direction afterturn;
         public final long time_enter;
+        public long time_exit;
         public final int node_id;
 
-        public LogEntry(Direction afterturn, long time_enter, int node_id) {
+        public LogEntry(Direction afterturn, long time_enter, long time_exit, int node_id) {
             this.afterturn = afterturn;
             this.time_enter = time_enter;
+            this.time_exit = time_exit;
             this.node_id = node_id;
         }
 
@@ -147,6 +149,7 @@ public class IndoorMapper {
             try {
                 retval.put("afterturn", afterturn.toString());
                 retval.put("time_enter", time_enter);
+                retval.put("time_exit", time_exit);
                 retval.put("node", node_id);
                 return retval;
             } catch (JSONException e) {}
@@ -156,6 +159,7 @@ public class IndoorMapper {
         public static LogEntry fromJSON(JSONObject json) throws JSONException {
             return new LogEntry(Direction.valueOf(json.getString("afterturn")),
                     json.getLong("time_enter"),
+                    json.getLong("time_exit"),
                     json.getInt("node"));
         }
     }
@@ -215,7 +219,7 @@ public class IndoorMapper {
 
     public static IndoorMap makeEmptyMap() {
         ArrayList<LogEntry> log = new ArrayList<>(1);
-        log.add(new LogEntry(Direction.forward, System.currentTimeMillis(), 0));
+        log.add(new LogEntry(Direction.forward, System.currentTimeMillis(), -1, 0));
 
         ArrayList<MapNode> nodes = new ArrayList<>(1);
         nodes.add(new MapNode(EnumSet.of(Direction.forward), "root node"));
@@ -382,9 +386,16 @@ public class IndoorMapper {
             }
         }
 
+        long currentTime = System.currentTimeMillis();
+
+        LogEntry lastNode = map.log.get(map.log.size() - 1);
+        if (lastNode.time_exit < 0) {
+            lastNode.time_exit = currentTime;
+        }
+
         if (!found_unexplored) {
             // TODO: instructions to go back to root
-            map.log.add(new LogEntry(Direction.forward, System.currentTimeMillis(), node_id));
+            map.log.add(new LogEntry(Direction.forward, currentTime, -1, node_id));
             return null;
         } else {
             int current = -1;
@@ -393,7 +404,7 @@ public class IndoorMapper {
                 d = parentDir.get(current);
                 current = parent.get(current);
             }
-            map.log.add(new LogEntry(d, System.currentTimeMillis(), node_id));
+            map.log.add(new LogEntry(d, currentTime, -1, node_id));
             return d.sub(currently_facing);
         }
     }
