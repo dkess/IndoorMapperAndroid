@@ -160,6 +160,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         textView.setText(msg + textView.getText());
     }
 
+
+    boolean lastWalkingTogglePressed = false;
     public void onGoPress(View view) {
         File file = new File(getExternalFilesDir(null), "nodes.json");
         IndoorMapper.IndoorMap map = IndoorMapper.IndoorMap.readFromFile(file);
@@ -176,7 +178,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             intent.putExtra("me.dkess.indoormapper.DATA", res.choices);
 
             // we definitely wont be walking while typing, so stop recording movement on this screen
-            ((ToggleButton) findViewById(R.id.walking_toggle)).setChecked(false);
+            ToggleButton walkingToggle = (ToggleButton) findViewById(R.id.walking_toggle);
+            lastWalkingTogglePressed = walkingToggle.isChecked();
+            walkingToggle.setChecked(false);
 
             startActivityForResult(intent, 0);
         }
@@ -185,7 +189,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         // start recording again
-        ((ToggleButton) findViewById(R.id.walking_toggle)).setChecked(true);
+        ((ToggleButton) findViewById(R.id.walking_toggle)).setChecked(lastWalkingTogglePressed);
 
         if (requestCode == 0) {
             if (resultCode == RESULT_OK) {
