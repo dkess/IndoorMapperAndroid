@@ -17,7 +17,9 @@ import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
@@ -317,6 +319,81 @@ public class IndoorMapper {
     }
 
     /**
+     * Returns the absolute direction leading us to an edge that has not been
+     * visited in reverse.
+     */
+    private Direction goTowardsNewEdge(int start) {
+        HashSet<IntPair> traveled = new HashSet<>();
+
+        for (int i = 0; i < map.log.size() - 1; i++) {
+            traveled.add(new IntPair(map.log.get(i).node_id, map.log.get(i + 1).node_id));
+        }
+
+        HashMap<Integer, Integer> goalsdict = new HashMap<>();
+
+        System.out.println("goals:");
+        goals_remaining = 0;
+        for (IntPair p : traveled) {
+            if (!traveled.contains(p.reversed())) {
+                goalsdict.put(p.b, p.a);
+                System.out.println("goal: " + p.b + ", " + p.a);
+                goals_remaining += 1;
+            }
+        }
+
+
+        if (goalsdict.isEmpty()) {
+            return null;
+        }
+
+        HashMap<Integer, Integer> parent = new HashMap<>();
+        HashMap<Integer, Direction> parentDir = new HashMap<>();
+
+        Queue<Integer> frontier = new ArrayDeque<>();
+        parent.put(start, -1);
+
+        frontier.add(start);
+
+        while (!frontier.isEmpty()) {
+            int current = frontier.remove();
+            MapNode currentNode = map.nodes.get(current);
+
+            // check if we have reached a goal
+            Integer possible = goalsdict.get(current);
+            if (possible != null) {
+                // compute path back to start
+                int trailer = possible;
+
+                System.out.println("going towards node #" + trailer);
+
+                while (current != start) {
+                    trailer = current;
+                    current = parent.get(current);
+                }
+
+                // get the direction to move from current to trailer
+                for (Map.Entry<Direction, Integer> e : map.nodes.get(current).branches.entrySet()) {
+                    if (e.getValue() == trailer) {
+                        return e.getKey();
+                    }
+                }
+            }
+
+            // iterate through neighbors
+            for (int next : currentNode.branches.values()) {
+                if (!parent.containsKey(next)) {
+                    parent.put(next, current);
+                    frontier.add(next);
+                }
+            }
+        }
+
+        // we should never get to this point (because we check for an empty goalsdict at the
+        // beginning), but still necessary
+        return null;
+    }
+
+    /**
      * Returns the direction the user should turn in, or null if we are done.
      */
     public Direction fork_part2(int choice, String newDesc, Direction forceTurn) {
@@ -326,31 +403,45 @@ public class IndoorMapper {
             // create a new node
             node_id = map.nodes.size();
             node = new MapNode(abs_branches, newDesc);
-            node.branches.put(behind, last_node_id);
             map.nodes.add(node);
         } else {
             node = map.nodes.get(choice);
             node_id = choice;
         }
 
+        node.branches.put(behind, last_node_id);
         map.nodes.get(last_node_id).branches.put(currently_facing, node_id);
 
         // Now the node and id are saved in the node and node_id vars
         // We now need to decide which direction the user should be directed in
         // We accomplish this by doing BFS until an unexplored node is found
-        HashMap<Integer, Integer> distance = new HashMap<>();
         HashMap<Integer, Integer> parent = new HashMap<>();
         HashMap<Integer, Direction> parentDir = new HashMap<>();
 
         Queue<Integer> frontier = new ArrayDeque<>();
-        distance.put(node_id, 0);
         parent.put(node_id, -1);
 
         frontier.add(node_id);
         boolean found_unexplored = false;
 
+        // we don't have to do BFS if there are no unknown nodes left, so check for that
+        goals_remaining = 0;
+        for (MapNode n : map.nodes) {
+            for (int i : n.branches.values()) {
+                if (i < 0) {
+                    goals_remaining += 1;
+                }
+            }
+        }
+
+        if (goals_remaining == 0) {
+            frontier.clear();
+        }
+
+        System.out.println("bfs");
         while (!frontier.isEmpty()) {
             int current = frontier.remove();
+            System.out.println("current: " + current);
             MapNode current_node = map.nodes.get(current);
             int[] branches = new int[current_node.branches.size()];
             int i = 0;
@@ -366,8 +457,8 @@ public class IndoorMapper {
             for (i = branches.length - 1; i >= 0; i--) {
                 Direction d = Direction.values()[branches[i]].sub(Direction.right).add(currently_facing);
                 int next_id = current_node.branches.get(d);
-                if (next_id == -1 || !distance.containsKey(next_id)) {
-                    distance.put(next_id, distance.get(current) + 1);
+                if (next_id == -1 || !parent.containsKey(next_id)) {
+                    System.out.println("" + d + ": " + next_id);
                     parent.put(next_id, current);
                     parentDir.put(next_id, d);
 
@@ -394,7 +485,14 @@ public class IndoorMapper {
         }
 
         if (!found_unexplored) {
-            // TODO: instructions to go back to root
+            // do BFS again, but this time find reverse edges
+            Direction d = goTowardsNewEdge(node_id);
+            if (d != null) {
+                map.log.add(new LogEntry(d, currentTime, -1, node_id));
+                return d.sub(currently_facing);
+            }
+
+            // if we are completely done, add this dummy log entry
             map.log.add(new LogEntry(Direction.forward, currentTime, -1, node_id));
             return null;
         } else {
@@ -445,9 +543,17 @@ public class IndoorMapper {
         return output;
     }
 
+
+    private int goals_remaining;
+    /**
+     * Returns the number of goals remaining
+     */
+    public int goals_remaining() {
+        return goals_remaining;
+    }
+
     /** Undoes the last action and returns the node_id, desc of the updated most recent position */
     public void undo() {
-
         int last_node_id = map.log.get(map.log.size() - 1).node_id;
         MapNode last_node = map.nodes.get(last_node_id);
         if (last_node_id == map.nodes.size() - 1) {

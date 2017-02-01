@@ -217,6 +217,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             displayMsg("File error! :(");
         }
         updateExpectedDir();
+
+        ((TextView) findViewById(R.id.goals_remaining)).setText("" + indoorMapper.goals_remaining());
         resetButtons();
 
         // Automatically fill in directions, if we already know what node we're on

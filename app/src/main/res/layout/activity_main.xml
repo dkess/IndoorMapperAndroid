@@ -147,4 +147,12 @@
         android:id="@+id/b_calibrate_north"
         android:onClick="calibrateForward" />
 
+    <TextView
+        android:text="TextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignTop="@+id/current_orientation"
+        android:layout_alignParentEnd="true"
+        android:id="@+id/goals_remaining" />
+
 </RelativeLayout>
